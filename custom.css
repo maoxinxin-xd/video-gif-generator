@@ -10,6 +10,25 @@
   animation: floatBlob 20s infinite ease-in-out alternate;
 }
 
+/* 工作区尺寸：桌面端固定高度，移动端自适应 */
+.app-workspace {
+  height: 70vh;
+  min-height: 520px;
+}
+@media (max-width: 1024px) {
+  .app-workspace {
+    height: auto;
+    min-height: min(85vh, 600px);
+    max-height: 95vh;
+    overflow-y: auto;
+  }
+}
+@media (max-width: 640px) {
+  .app-workspace {
+    min-height: min(90vh, 560px);
+  }
+}
+
 /* 扩展态效果 */
 .app-workspace.has-results {
   max-width: 64rem; /* max-w-5xl/6xl size fitting */
@@ -48,29 +67,76 @@
 /* Toast 显示动画 */
 .toast-show {
   opacity: 1 !important;
-  transform: translateY(0) !important;
+  transform: translate(-50%, 0) !important;
   pointer-events: auto !important;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 10px; /* 增加一点高度，更易于拖拽 */
+  width: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03); /* 更柔和的轨道背景 */
+  border-radius: 8px; /* 圆角更大 */
+  margin: 0 4px; /* 轨道两边留点边距 */
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(116, 94, 245, 0.4); /* 使用主色调，提高辨识度 */
+  border-radius: 8px; /* 圆角更大 */
+  border: 2px solid transparent; /* 制造悬浮内边距感 */
+  background-clip: padding-box; /* 让 border-transparent 生效，看起来更细长 */
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(116, 94, 245, 0.8);
+  border: 1px solid transparent; /* hover时变粗一点 */
+  background-clip: padding-box;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(156, 124, 247, 1);
+}
+
+/* 隐藏横向滚动条的空白占位角 */
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Timeline Marker Styles */
 .timeline-marker {
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  bottom: -10px;
+  transform: translateX(-50%);
   width: 12px;
-  height: 24px;
-  background: #745DF5;
-  border: 2px solid white;
-  border-radius: 4px;
+  height: 12px;
   cursor: grab;
   z-index: 10;
-  box-shadow: 0 0 8px rgba(116, 94, 245, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  color: #745DF5;
+  font-size: 10px;
+  line-height: 1;
   transition: transform 0.1s;
 }
 
+.timeline-marker::after {
+  content: '▲';
+  text-shadow: 0 1px 3px rgba(116, 94, 245, 0.5);
+}
+
+.timeline-marker::before {
+  content: '';
+  position: absolute;
+  bottom: 10px;
+  width: 2px;
+  height: 16px;
+  background-color: currentColor;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
 .timeline-marker:hover {
-  transform: translate(-50%, -50%) scale(1.2);
-  background: #9c7cf7;
+  transform: translateX(-50%) scale(1.2);
 }
 
 .timeline-marker:active {
@@ -81,43 +147,88 @@
 @media (max-width: 1024px) {
   .app-workspace {
     flex-direction: column;
-    height: auto;
-    min-height: 80vh;
     max-width: 100% !important;
+  }
+  /* 视频区域在移动端/平板必须保持可见 */
+  .video-panel {
+    flex-shrink: 0;
+    min-height: 240px !important;
   }
   .results-sidebar {
     width: 100%;
     flex-direction: row;
-    height: 220px;
+    flex-shrink: 0;
+    min-height: 200px;
+    max-height: 220px;
   }
   .result-card {
     height: 100%;
+    min-height: 180px;
   }
-  #downloadGifBtn {
+  .download-buttons {
+    flex-direction: column;
+    min-width: 60px;
+  }
+  .download-buttons button {
     width: 60px;
+    min-width: 60px;
     height: 100%;
     flex-direction: column;
+    flex: 0 1 auto;
   }
-  #downloadGifBtn span {
+  .download-buttons button span {
     writing-mode: vertical-lr;
     letter-spacing: 2px;
   }
 }
 
-@media (max-width: 640px) {
+/* 900px 附近：避免布局临界混乱，结果栏紧凑排列 */
+@media (max-width: 900px) {
+  .app-workspace {
+    gap: 1rem;
+  }
   .results-sidebar {
     flex-direction: column;
-    height: auto;
+    min-height: auto;
+    max-height: none;
+  }
+  .result-card {
+    min-height: 160px;
+  }
+  .download-buttons {
+    flex-direction: row;
+    width: 100%;
+  }
+  .download-buttons button {
+    width: 100%;
+    min-width: auto;
+    height: 48px;
+    flex-direction: row;
+  }
+  .download-buttons button span {
+    writing-mode: horizontal-tb;
+    letter-spacing: normal;
+  }
+}
+
+@media (max-width: 640px) {
+  .video-panel {
+    min-height: 200px !important;
+  }
+  .results-sidebar {
+    flex-direction: column;
+    min-height: auto;
   }
   .result-card {
     height: 180px;
+    min-height: 180px;
   }
-  #downloadGifBtn {
+  .download-buttons button {
     width: 100%;
     height: 50px;
     flex-direction: row;
   }
-  #downloadGifBtn span {
+  .download-buttons button span {
     writing-mode: horizontal-tb;
     letter-spacing: normal;
   }

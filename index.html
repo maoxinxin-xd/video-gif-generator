@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>视频关键帧 GIF 生成器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#745DF5',
+            'primary-light': '#9c7cf7',
+            info: '#2080f0',
+            success: '#52c41a',
+            error: '#f5222d',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="./custom.css" />
+</head>
+
+<body
+  class="app-body relative bg-[#0A0A0A] text-white font-sans antialiased overflow-hidden flex flex-col h-screen selection:bg-primary selection:text-white">
+
+  <!-- 环境光背景 -->
+  <div class="ambient-bg absolute inset-0 overflow-hidden pointer-events-none z-0">
+    <div
+      class="ambient-blob bg-primary absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full blur-[140px] opacity-15 mix-blend-screen">
+    </div>
+    <div
+      class="ambient-blob bg-info absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full blur-[140px] opacity-15 mix-blend-screen"
+      style="animation-delay: -2s;"></div>
+  </div>
+
+  <!-- 顶部导航 -->
+  <nav
+    class="app-navbar relative z-20 h-16 px-6 flex items-center justify-between backdrop-blur-xl bg-white/5 border-b border-white/5 shadow-sm">
+    <div class="flex-1">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-info flex items-center justify-center shadow-lg shadow-primary/20">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <span class="text-lg font-bold tracking-wide">视频<span class="text-primary">GIF</span>生成器</span>
+      </div>
+    </div>
+    <div class="flex-none">
+      <span
+        class="px-2.5 py-1 rounded-md bg-white/10 border border-white/5 text-[11px] font-mono text-white/50 tracking-wider">maoxinxin-xd</span>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <main class="app-main relative z-10 flex-1 flex items-center justify-center p-4 sm:p-8 min-h-0">
+
+    <!-- 状态提示 -->
+    <div id="statusToast"
+      class="fixed top-24 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform -translate-y-4 opacity-0 pointer-events-none">
+      <div
+        class="alert shadow-2xl border border-white/10 backdrop-blur-2xl bg-[#1A1A1A]/90 text-white rounded-2xl flex items-center gap-3 px-5 py-3">
+        <div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin hidden"
+          id="statusSpinner"></div>
+        <span id="statusText" class="text-sm font-medium tracking-wide">处理中...</span>
+      </div>
+    </div>
+
+    <!-- 工作区 -->
+    <div
+      class="app-workspace w-full max-w-3xl h-[70vh] min-h-[520px] flex flex-col lg:flex-row gap-5 p-5 rounded-[2rem] border border-white/10 bg-[#262626]/40 backdrop-blur-2xl shadow-2xl transition-all duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative"
+      id="mainContainer">
+
+      <!-- 左侧/主体：上传与视频预览区域 -->
+      <div class="flex-1 flex flex-col gap-4 min-h-0 relative">
+        <div id="dropZone"
+          class="video-panel flex-1 relative rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.02] hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 flex flex-col items-center justify-center overflow-hidden cursor-pointer group min-h-0">
+          
+          <!-- 空状态 / 上传提示 -->
+          <div id="uploadPrompt"
+            class="upload-prompt flex flex-col items-center text-center p-6 pointer-events-none transition-transform duration-500 group-hover:scale-105">
+            <div
+              class="w-20 h-20 mb-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-white/40 group-hover:text-primary group-hover:bg-primary/10 group-hover:border-primary/20 transition-all shadow-xl shadow-black/20">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                stroke="currentColor" class="w-10 h-10">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+              </svg>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2 tracking-tight">导入视频文件</h2>
+            <p class="text-white/40 text-sm mb-4">点击区域，或将文件拖拽至此处</p>
+            <div class="flex items-center gap-2 text-[10px] font-mono text-white/30 uppercase tracking-widest">
+              <span class="px-2 py-1 rounded bg-white/5 border border-white/5">MP4</span>
+              <span class="px-2 py-1 rounded bg-white/5 border border-white/5">MOV</span>
+              <span class="px-2 py-1 rounded bg-white/5 border border-white/5">WEBM</span>
+            </div>
+          </div>
+
+          <!-- 视频播放器 -->
+          <video id="previewVideo" class="app-video absolute inset-0 w-full h-full object-contain hidden bg-black/80"
+            controls playsinline muted></video>
+
+          <input type="file" id="videoInput" class="hidden" accept="video/*" />
+        </div>
+
+        <!-- 重新上传按钮 -->
+        <button id="replaceBtn"
+          class="hidden absolute top-4 right-4 z-20 pointer-events-auto flex items-center gap-2 bg-[#262626]/90 hover:bg-primary text-white border border-white/10 rounded-xl px-4 py-2.5 backdrop-blur-xl transition-all hover:shadow-[0_0_20px_rgba(116,94,245,0.4)] hover:border-primary/50 group/btn"
+          title="更换视频">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+            stroke="currentColor" class="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+          <span class="text-sm font-medium">重新上传</span>
+        </button>
+
+        <!-- 视频帧控制轴 -->
+        <div id="timelineContainer" class="hidden flex-col gap-2 bg-[#1A1A1A]/80 border border-white/5 rounded-2xl p-4 transition-all duration-300">
+            <div class="flex justify-between items-center text-[11px] font-mono text-white/50 mb-1">
+                <span>00:00</span>
+                <span class="text-white/80">点击添加，拖拽移动，双击删除</span>
+                <span id="durationText">00:00</span>
+            </div>
+            <div id="timelineTrack" class="relative h-6 bg-white/5 rounded-lg border border-white/10 cursor-pointer overflow-hidden group">
+                <div class="absolute top-0 bottom-0 left-0 bg-primary/20 w-0 pointer-events-none transition-all duration-100" id="timelineProgress"></div>
+                <!-- 关键帧标记将插入这里 -->
+            </div>
+            <div class="text-[10px] text-white/40 mt-1 flex justify-between">
+                <span>当前共 <span id="markerCount" class="text-primary font-bold">0</span> 个关键帧</span>
+                <span id="gifDurationHint">预计生成时长：0s</span>
+            </div>
+        </div>
+      </div>
+
+      <!-- 右侧：结果侧边栏 -->
+      <aside id="resultsSection" class="results-sidebar hidden w-full lg:w-[320px] flex flex-col gap-4">
+
+        <!-- GIF 结果卡片 -->
+        <div
+          class="result-card group flex-1 bg-[#1A1A1A]/80 border border-white/5 rounded-2xl overflow-hidden flex flex-col relative transition-all duration-300 hover:border-primary/40 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+          <div
+            class="absolute top-3 left-3 z-10 flex items-center gap-2 bg-[#262626]/90 border border-white/10 rounded-lg px-2.5 py-1.5 shadow-lg backdrop-blur-xl">
+            <div class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(82,196,26,0.8)] animate-pulse" id="statusDot"></div>
+            <span class="text-[11px] font-semibold text-white/90" id="resultTitle">生成预览</span>
+          </div>
+          
+          <div
+            class="flex-1 relative bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+CjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iIzFBMTExQyI+PC9yZWN0Pgo8Y2lyY2xlIGN4PSIyIiBjeT0iMiIgcj0iMSIgZmlsbD0iIzMzMyI+PC9jaXJjbGU+Cjwvc3ZnPg==')] flex items-center justify-center overflow-hidden p-4">
+            
+            <img id="gifPreview"
+              class="w-full h-full object-contain group-hover:scale-[1.03] transition-transform duration-700 hidden"
+              alt="GIF 预览" />
+              
+            <!-- 占位符 -->
+            <div id="gifPlaceholder" class="text-white/20 flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" class="w-16 h-16 mb-2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                </svg>
+                <span class="text-xs font-mono">等待生成...</span>
+            </div>
+            
+          </div>
+        </div>
+
+        <!-- 底部下载按钮 -->
+        <button id="downloadGifBtn" disabled
+          class="flex-none py-3.5 bg-gradient-to-r from-primary to-primary-light hover:to-[#a98fff] text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_4px_20px_rgba(116,94,245,0.4)] hover:shadow-[0_8px_25px_rgba(116,94,245,0.6)] hover:-translate-y-0.5 active:translate-y-0 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+            class="w-5 h-5 group-hover:animate-bounce">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 12.75l-3-3m3 3l3-3m-3 3v-7.5" />
+          </svg>
+          <span class="tracking-wide">下载 GIF</span>
+        </button>
+      </aside>
+
+    </div>
+
+  </main>
+
+  <canvas id="captureCanvas" class="hidden"></canvas>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.3.2/gifshot.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+
+</html>

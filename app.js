@@ -23,6 +23,7 @@ const elements = {
   downloadGifBtn: document.querySelector("#downloadGifBtn"),
   downloadZipBtn: document.querySelector("#downloadZipBtn"),
   targetWidthSelect: document.querySelector("#targetWidthSelect"),
+  aspectRatioSelect: document.querySelector("#aspectRatioSelect"),
   
   captureCanvas: document.querySelector("#captureCanvas"),
   statusToast: document.querySelector("#statusToast"),
@@ -48,6 +49,7 @@ const state = {
   pendingGeneration: false,
   frameCache: new Map(),
   targetWidthPreset: "480", // "480" | "720" | "1080" | "original"
+  aspectRatioMode: "original", // "original" | "square-crop" | "square-pad"
 };
 
 let toastTimeout = null;
@@ -130,6 +132,14 @@ function bindEvents() {
           triggerGifGeneration();
       });
   }
+
+  if (elements.aspectRatioSelect) {
+      elements.aspectRatioSelect.addEventListener("change", (e) => {
+          state.aspectRatioMode = e.target.value;
+          state.frameCache.clear();
+          triggerGifGeneration();
+      });
+  }
   
   // Timeline Events
   elements.timelineTrack.addEventListener("click", (e) => {
@@ -203,12 +213,13 @@ function bindEvents() {
       if (!state.videoUrl || state.markers.length === 0 || typeof JSZip === "undefined") return;
       elements.downloadZipBtn.disabled = true;
       try {
-          showToast("正在抓取视频原图帧...", "info");
+          showToast("正在抓取关键帧 PNG...", "info");
           const sortedMarkers = [...state.markers].sort((a, b) => a - b);
-          const frameSize = {
-              ...getOriginalFrameSize(elements.previewVideo.videoWidth, elements.previewVideo.videoHeight),
-              captureFormat: "png"
-          };
+          const frameSize = getTargetFrameSize(
+              elements.previewVideo.videoWidth,
+              elements.previewVideo.videoHeight,
+              { captureFormat: "png" }
+          );
           const concurrency = getOptimalConcurrency(sortedMarkers.length);
           const framesData = await captureFramesParallel(sortedMarkers, {
               token: 1,
@@ -237,7 +248,7 @@ function bindEvents() {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          showToast("原图打包下载成功！", "success");
+          showToast("PNG 打包下载成功！", "success");
       } catch (err) {
           console.error(err);
           showToast("打包失败：" + err.message, "error");
@@ -489,30 +500,137 @@ function cancelPendingGeneration() {
   }
 }
 
-function getTargetFrameSize(videoWidth, videoHeight) {
+function getTargetFrameSize(videoWidth, videoHeight, options = {}) {
   const sourceWidth = Math.max(1, Math.round(videoWidth || DEFAULT_TARGET_WIDTH));
   const sourceHeight = Math.max(1, Math.round(videoHeight || 1));
+  const aspectRatioMode = options.aspectRatioMode || state.aspectRatioMode;
+  const captureFormat = options.captureFormat || "jpeg";
+
+  if (aspectRatioMode === "square-crop") {
+    const sourceSide = Math.min(sourceWidth, sourceHeight);
+
+    if (state.targetWidthPreset === "original") {
+      return {
+        width: sourceSide,
+        height: sourceSide,
+        aspectRatioMode,
+        captureFormat,
+      };
+    }
+
+    const maxWidth = parseInt(state.targetWidthPreset, 10) || DEFAULT_TARGET_WIDTH;
+    const side = Math.max(1, Math.min(sourceSide, maxWidth));
+    return {
+      width: side,
+      height: side,
+      aspectRatioMode,
+      captureFormat,
+    };
+  }
+
+  if (aspectRatioMode === "square-pad") {
+    const sourceSide = Math.max(sourceWidth, sourceHeight);
+
+    if (state.targetWidthPreset === "original") {
+      return {
+        width: sourceSide,
+        height: sourceSide,
+        aspectRatioMode,
+        captureFormat,
+      };
+    }
+
+    const maxWidth = parseInt(state.targetWidthPreset, 10) || DEFAULT_TARGET_WIDTH;
+    const side = Math.max(1, Math.min(sourceSide, maxWidth));
+    return {
+      width: side,
+      height: side,
+      aspectRatioMode,
+      captureFormat,
+    };
+  }
 
   if (state.targetWidthPreset === "original") {
-    return { width: sourceWidth, height: sourceHeight };
+    return {
+      width: sourceWidth,
+      height: sourceHeight,
+      aspectRatioMode,
+      captureFormat,
+    };
   }
 
   const maxWidth = parseInt(state.targetWidthPreset, 10) || DEFAULT_TARGET_WIDTH;
   const width = Math.max(1, Math.min(sourceWidth, maxWidth));
   const height = Math.max(1, Math.round((width / sourceWidth) * sourceHeight));
 
-  return { width, height };
-}
-
-function getOriginalFrameSize(videoWidth, videoHeight) {
-  const width = Math.max(1, Math.round(videoWidth || DEFAULT_TARGET_WIDTH));
-  const height = Math.max(1, Math.round(videoHeight || 1));
-  return { width, height };
+  return {
+    width,
+    height,
+    aspectRatioMode,
+    captureFormat,
+  };
 }
 
 function getFrameCacheKey(time, frameSize) {
   const normalizedTime = Math.max(0, Number.isFinite(time) ? time : 0).toFixed(3);
-  return `${frameSize.width}x${frameSize.height}:${normalizedTime}`;
+  const aspectRatioMode = frameSize.aspectRatioMode || "original";
+  const captureFormat = frameSize.captureFormat || "jpeg";
+  return `${frameSize.width}x${frameSize.height}:${aspectRatioMode}:${captureFormat}:${normalizedTime}`;
+}
+
+function drawFrameToCanvas(video, canvas, ctx, frameSize) {
+  const sourceWidth = Math.max(1, Math.round(video.videoWidth || frameSize.width));
+  const sourceHeight = Math.max(1, Math.round(video.videoHeight || frameSize.height));
+  const aspectRatioMode = frameSize.aspectRatioMode || "original";
+
+  if (aspectRatioMode === "square-crop") {
+      const cropSize = Math.min(sourceWidth, sourceHeight);
+      const sx = Math.max(0, Math.round((sourceWidth - cropSize) / 2));
+      const sy = Math.max(0, Math.round((sourceHeight - cropSize) / 2));
+
+      ctx.drawImage(
+          video,
+          sx,
+          sy,
+          cropSize,
+          cropSize,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+      );
+      return;
+  }
+
+  if (aspectRatioMode === "square-pad") {
+      const backgroundScale = Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight);
+      const backgroundWidth = sourceWidth * backgroundScale;
+      const backgroundHeight = sourceHeight * backgroundScale;
+      const backgroundX = (canvas.width - backgroundWidth) / 2;
+      const backgroundY = (canvas.height - backgroundHeight) / 2;
+
+      ctx.fillStyle = "#0A0A0A";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.filter = "blur(28px) brightness(0.72)";
+      ctx.drawImage(video, backgroundX, backgroundY, backgroundWidth, backgroundHeight);
+      ctx.restore();
+
+      ctx.fillStyle = "rgba(10, 10, 10, 0.18)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const foregroundScale = Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
+      const foregroundWidth = sourceWidth * foregroundScale;
+      const foregroundHeight = sourceHeight * foregroundScale;
+      const foregroundX = (canvas.width - foregroundWidth) / 2;
+      const foregroundY = (canvas.height - foregroundHeight) / 2;
+
+      ctx.drawImage(video, foregroundX, foregroundY, foregroundWidth, foregroundHeight);
+      return;
+  }
+
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 }
 
 function getFrameCapturePlan(times, frameSize) {
@@ -764,7 +882,7 @@ function captureFrameWithVideo(video, time, canvas, ctx, token, frameSize, optio
             canvas.width = frameSize.width;
             canvas.height = frameSize.height;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            drawFrameToCanvas(video, canvas, ctx, frameSize);
             const usePng = frameSize.captureFormat === "png";
             const dataUrl = usePng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.8);
             finish(() => resolve(dataUrl));
@@ -955,6 +1073,7 @@ function resetUI() {
   state.gifBlobUrl = null;
   state.zoomLevel = 1;
   state.targetWidthPreset = "480";
+  state.aspectRatioMode = "original";
   state.draggingMarker = null;
   state.draggingMarkerElement = null;
   state.didDragMarker = false;
@@ -966,6 +1085,9 @@ function resetUI() {
   }
   if (elements.targetWidthSelect) {
       elements.targetWidthSelect.value = "480";
+  }
+  if (elements.aspectRatioSelect) {
+      elements.aspectRatioSelect.value = "original";
   }
   if (elements.timelineTrack) {
       elements.timelineTrack.style.width = "100%";
